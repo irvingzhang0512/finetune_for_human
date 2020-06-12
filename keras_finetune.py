@@ -1,89 +1,97 @@
 import argparse
-import keras
 import os
-from functools import partial
+
+import keras
+import tensorflow as tf
+
 from datasets import get_flow_from_directory
 from model_factory import build_model
 
-# TODO: use argparse instead of global vars
+config = tf.ConfigProto()
+config.gpu_options.allow_growth = True
+config.gpu_options.per_process_gpu_memory_fraction = True
+keras.backend.set_session(tf.Session(
+    config=config
+))
 parser = argparse.ArgumentParser()
 
+# BASE PARAMS
 parser.add_argument("--logs_dir", type=str, default="./logs")
 
-parser.add_argument("--string", type=str, default="")
-parser.add_argument("--int", type=int, default=0)
-parser.add_argument("--float", type=float, default=.1)
-parser.add_argument("--action", action="store_true", default=False)
-
-
-
-logs_dir = "./logs"
-
 # TRAINING PARAMS
-epochs = 20
-validation_freq = 1
-early_stopping_patience = 3
-# lr & optimizer & loss & metrics
-learning_rate_start = 0.01
-lr_factor = 0.1
-lr_patience = 5
-min_lr = 1e-4
+parser.add_argument("--epochs", type=int, default=20)
+parser.add_argument("--validation_freq", type=int, default=1)
+parser.add_argument("--early_stopping_patience", type=int, default=3)
+# lr
+parser.add_argument("--learning_rate_start", type=float, default=.01)
+parser.add_argument("--lr_factor", type=float, default=.1)
+parser.add_argument("--lr_patience", type=int, default=5)
+parser.add_argument("--min_lr", type=float, default=1e-4)
 # optimizer
-optimizer_type = 'sgd'
-optimizer_momentum = 0.9
-optimizer_nesterov = False
+parser.add_argument("--optimizer_type", type=str, default="sgd")
+parser.add_argument("--optimizer_momentum", type=float, default=.9)
+parser.add_argument("--use_optimizer_nesterov",
+                    action="store_true",
+                    default=False)
 # loss
-label_smoothing = 0
+parser.add_argument("--label_smoothing", type=int, default=0)
 # metrics
-metrics_monitor = 'val_loss'
+parser.add_argument("--metrics_monitor", type=str, default="val_loss")
 
 # DATASET PARAMS
-TRAIN_DIR = 'data/arimgs/train'
-VAL_DIR = 'data/arimgs/val'
-CLASS_NAMES = ['nothing', 'other', 'close', 'left', 'right', 'ok']
-TRAIN_BATCH_SIZE = 32
-VAL_bATCH_SIZE = 32
+parser.add_argument("--train_dir", type=str, default="data/arimgs/train")
+parser.add_argument("--val_dir", type=str, default="data/arimgs/val")
+parser.add_argument(
+    "--class_names",
+    type=list,
+    default=['nothing', 'other', 'close', 'left', 'right', 'ok'])
+parser.add_argument("--train_batch_size", type=int, default=32)
+parser.add_argument("--val_batch_size", type=int, default=32)
 
 # AUGMENTATION
-train_rotation_range = 3
-train_width_shift_range = 0.05
-train_height_shift_range = 0.05
-train_brightness_range = [0.7, 1.3]
-train_shear_range = 3
-train_zoom_range = [0.8, 1.0]
+parser.add_argument("--train_rotation_range", type=int, default=3)
+parser.add_argument("--train_width_shift_range", type=float, default=.05)
+parser.add_argument("--train_height_shift_range", type=float, default=.05)
+parser.add_argument("--train_brightness_range", type=list, default=[0.7, 1.3])
+parser.add_argument("--train_shear_range", type=int, default=3)
+parser.add_argument("--train_zoom_range", type=list, default=[0.7, 1.])
 
 # MODEL PARAMS
-MODEL_TYPE = 'mobilenet_v3_small'
-NUM_CLASSES = 6
-DROPOUT_RATE = 0.5
-INPUT_IMG_SIZE = 224
+parser.add_argument("--model_type", type=str, default="mobilenet_v3_small")
+parser.add_argument("--num_classes", type=int, default=6)
+parser.add_argument("--dropout_rate", type=float, default=.5)
+parser.add_argument("--input_img_size", type=int, default=224)
+parser.add_argument(
+    "--weights",
+    type=str,
+    default="F:\\data\\keras\\weights_mobilenet_v3_small_224_1.0_float_no_top.h5")
 # mobilenet v3
-last_conv_ch = 1024
+parser.add_argument("--last_conv_ch", type=int, default=1024)
 
 
 def build_optimizer(args):
-    if optimizer_type == 'sgd':
-        return keras.optimizers.SGD(learning_rate=learning_rate_start,
-                                    momentum=optimizer_momentum,
-                                    nesterov=optimizer_nesterov)
-    raise ValueError("unknown optimizer {}".format(optimizer_type))
+    if args.optimizer_type == 'sgd':
+        return keras.optimizers.SGD(learning_rate=args.learning_rate_start,
+                                    momentum=args.optimizer_momentum,
+                                    nesterov=args.use_optimizer_nesterov)
+    raise ValueError("unknown optimizer {}".format(args.optimizer_type))
 
 
 def build_model_and_preprocess_fn(args):
     model, preprocess_fn = build_model(
-        model_type=MODEL_TYPE,
-        num_classes=NUM_CLASSES,
-        input_shape=(INPUT_IMG_SIZE, INPUT_IMG_SIZE, 3),
-        dropout_rate=DROPOUT_RATE,
-        last_conv_ch=last_conv_ch,
-        weights=None,
+        model_type=args.model_type,
+        num_classes=args.num_classes,
+        input_shape=(args.input_img_size, args.input_img_size, 3),
+        dropout_rate=args.dropout_rate,
+        last_conv_ch=args.last_conv_ch,
+        weights=args.weights,
     )
 
     model.compile(
-        optimizer=build_optimizer(),
+        optimizer=build_optimizer(args),
         loss=keras.losses.CategoricalCrossentropy(
-            from_logits=True,
-            label_smoothing=label_smoothing,
+            from_logits=False,
+            label_smoothing=args.label_smoothing,
         ),
         metrics=[
             keras.metrics.CategoricalAccuracy(),
@@ -98,28 +106,22 @@ def build_model_and_preprocess_fn(args):
 
 
 def build_data_generator(preprocess_fn, args):
-    preprocess_fn = partial(
-        preprocess_fn,
-        backend=keras.backend,
-        layers=keras.layers,
-        models=keras.models,
-        utils=keras.utils,
-    )
     train_generator, val_generator = get_flow_from_directory(
-        train_dir=TRAIN_DIR,
-        val_dir=VAL_DIR,
-        classes=CLASS_NAMES,
-        train_batch_size=TRAIN_BATCH_SIZE,
-        val_batch_size=VAL_bATCH_SIZE,
-        train_rotation_range=train_rotation_range,
-        train_width_shift_range=train_width_shift_range,
-        train_height_shift_range=train_height_shift_range,
-        train_brightness_range=train_brightness_range,
-        train_shear_range=train_shear_range,
-        train_zoom_range=train_zoom_range,
+        train_dir=args.train_dir,
+        val_dir=args.val_dir,
+        classes=args.class_names,
+        train_batch_size=args.train_batch_size,
+        val_batch_size=args.val_batch_size,
+        train_rotation_range=args.train_rotation_range,
+        train_width_shift_range=args.train_width_shift_range,
+        train_height_shift_range=args.train_height_shift_range,
+        train_brightness_range=args.train_brightness_range,
+        train_shear_range=args.train_shear_range,
+        train_zoom_range=args.train_zoom_range,
         class_mode='categorical',
         preprocess_fn=preprocess_fn,
     )
+    return train_generator, val_generator
 
 
 def build_callbacks(args):
@@ -127,9 +129,9 @@ def build_callbacks(args):
     # early stopping
     callbacks.append(
         keras.callbacks.EarlyStopping(
-            monitor=metrics_monitor,  # 检测的变量
+            monitor=args.metrics_monitor,  # 检测的变量
             min_delta=0,  # 变化多少才会触发
-            patience=early_stopping_patience,  # 最多等待几轮
+            patience=args.early_stopping_patience,  # 最多等待几轮
             verbose=0,  # 显示相关
             mode='auto',  # 是取最大值还是最小值，默认自动选择，取值范围[auto, min, max]
             baseline=None,  # 当检测的变量达到多少停止
@@ -137,11 +139,12 @@ def build_callbacks(args):
         ))
 
     # model checkpoint
-    filepath = os.path.join(logs_dir, "weights_{epoch:03d}-{val_loss:.4f}.h5")
+    filepath = os.path.join(args.logs_dir,
+                            "weights_{epoch:03d}-{val_loss:.4f}.h5")
     callbacks.append(
         keras.callbacks.ModelCheckpoint(
             filepath,
-            monitor=metrics_monitor,  # 判断模型 best 的依据
+            monitor=args.metrics_monitor,  # 判断模型 best 的依据
             verbose=0,  # 显示相关
             save_best_only=False,  # 只保存最佳模型
             save_weights_only=False,  # 只保存模型参数，不保存结构
@@ -168,20 +171,20 @@ def build_callbacks(args):
     # 本方法还会用到 optimizers 中定义的 lr，将其作为初始lr
     callbacks.append(
         keras.callbacks.ReduceLROnPlateau(
-            monitor=metrics_monitor,  # 监控的性能指标
-            factor=lr_factor,  # 学习率衰减印字
-            patience=lr_patience,  # 如果多久性能指标不提升就进行学习率衰减
+            monitor=args.metrics_monitor,  # 监控的性能指标
+            factor=args.lr_factor,  # 学习率衰减印字
+            patience=args.lr_patience,  # 如果多久性能指标不提升就进行学习率衰减
             verbose=0,  # 展示相关
             mode='auto',  # 性能指标相关
             min_delta=1e-4,  # 性能指标变化的最小值（小于这个值就认为没有变化）
             cooldown=0,  # 相当于是warmup，先执行 cooldown epochs 后，在执行本callback的学习率优化策略
-            min_lr=min_lr,  # 学习率最小值
+            min_lr=args.min_lr,  # 学习率最小值
         ))
 
     # tensorboard
     callbacks.append(
         keras.callbacks.TensorBoard(
-            log_dir=logs_dir,
+            log_dir=args.logs_dir,
             histogram_freq=0,
             batch_size=None,
             write_graph=True,
@@ -193,6 +196,7 @@ def build_callbacks(args):
             embeddings_data=None,
             update_freq='epoch',  # batch/epoch/int，int为任意整数，表示样本数量
         ))
+    return callbacks
 
 
 def main(args):
@@ -201,12 +205,12 @@ def main(args):
     callbacks = build_callbacks(args)
     model.fit_generator(train_generator,
                         steps_per_epoch=None,
-                        epochs=epochs,
+                        epochs=args.epochs,
                         verbose=1,
                         callbacks=callbacks,
                         validation_data=val_generator,
                         validation_steps=None,
-                        validation_freq=validation_freq,
+                        validation_freq=args.validation_freq,
                         class_weight=None,
                         max_queue_size=10,
                         workers=1,

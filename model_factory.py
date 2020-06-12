@@ -1,6 +1,8 @@
+from functools import partial
+
 import keras
-from keras_applications import mobilenet_v3
 from keras import layers
+from keras_applications import mobilenet_v3
 
 
 def build_model(model_type, **kwargs):
@@ -39,10 +41,19 @@ def build_mobilenet_v3_small(
                       padding='same',
                       name='Logits'),
         layers.Flatten(),
+        layers.Softmax(name='Predictions/Softmax')
     ])
     inputs = layers.Input(input_shape)
     x = backbone(inputs)
     x = classifier(x)
     model = keras.Model(inputs, x, name="ar_mobilenet_v3_small")
     model.build(input_shape)
-    return model, mobilenet_v3.preprocess_input
+
+    preprocess_fn = partial(
+        mobilenet_v3.preprocess_input,
+        backend=keras.backend,
+        layers=keras.layers,
+        models=keras.models,
+        utils=keras.utils,
+    )
+    return model, preprocess_fn

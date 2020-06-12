@@ -8,9 +8,9 @@
 + Feature
   + [x] img path dataset
   + [x] simple training scripts
+  + [x] webcam demo
 + TODO
   + [ ] finetune codes
-  + [ ] webcam demo
   + [ ] eval codes
   + [ ] keras to tvm
   + [ ] keras to pb
