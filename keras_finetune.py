@@ -1,7 +1,6 @@
 import argparse
 import os
 
-import keras
 import tensorflow as tf
 
 from datasets import get_flow_from_directory
@@ -10,9 +9,7 @@ from model_factory import build_model
 config = tf.ConfigProto()
 config.gpu_options.allow_growth = True
 config.gpu_options.per_process_gpu_memory_fraction = True
-keras.backend.set_session(tf.Session(
-    config=config
-))
+tf.keras.backend.set_session(tf.Session(config=config))
 parser = argparse.ArgumentParser()
 
 # BASE PARAMS
@@ -49,12 +46,12 @@ parser.add_argument("--train_batch_size", type=int, default=32)
 parser.add_argument("--val_batch_size", type=int, default=32)
 
 # AUGMENTATION
-parser.add_argument("--train_rotation_range", type=int, default=3)
-parser.add_argument("--train_width_shift_range", type=float, default=.05)
-parser.add_argument("--train_height_shift_range", type=float, default=.05)
-parser.add_argument("--train_brightness_range", type=list, default=[0.7, 1.3])
-parser.add_argument("--train_shear_range", type=int, default=3)
-parser.add_argument("--train_zoom_range", type=list, default=[0.7, 1.])
+parser.add_argument("--train_rotation_range", type=int, default=5)
+parser.add_argument("--train_width_shift_range", type=float, default=.1)
+parser.add_argument("--train_height_shift_range", type=float, default=.1)
+parser.add_argument("--train_brightness_range", type=list, default=[0.5, 1.5])
+parser.add_argument("--train_shear_range", type=int, default=5)
+parser.add_argument("--train_zoom_range", type=list, default=[0.6, 1.4])
 
 # MODEL PARAMS
 parser.add_argument("--model_type", type=str, default="mobilenet_v3_small")
@@ -64,16 +61,18 @@ parser.add_argument("--input_img_size", type=int, default=224)
 parser.add_argument(
     "--weights",
     type=str,
-    default="F:\\data\\keras\\weights_mobilenet_v3_small_224_1.0_float_no_top.h5")
+    default=
+    "F:\\data\\keras\\weights_mobilenet_v3_small_minimalistic_224_1.0_float_no_top.h5"
+)
 # mobilenet v3
-parser.add_argument("--last_conv_ch", type=int, default=1024)
+parser.add_argument("--minimalistic", action="store_true")
 
 
 def build_optimizer(args):
     if args.optimizer_type == 'sgd':
-        return keras.optimizers.SGD(learning_rate=args.learning_rate_start,
-                                    momentum=args.optimizer_momentum,
-                                    nesterov=args.use_optimizer_nesterov)
+        return tf.keras.optimizers.SGD(args.learning_rate_start,
+                                       momentum=args.optimizer_momentum,
+                                       nesterov=args.use_optimizer_nesterov)
     raise ValueError("unknown optimizer {}".format(args.optimizer_type))
 
 
@@ -83,18 +82,18 @@ def build_model_and_preprocess_fn(args):
         num_classes=args.num_classes,
         input_shape=(args.input_img_size, args.input_img_size, 3),
         dropout_rate=args.dropout_rate,
-        last_conv_ch=args.last_conv_ch,
         weights=args.weights,
+        minimalistic=args.minimalistic,
     )
 
     model.compile(
         optimizer=build_optimizer(args),
-        loss=keras.losses.CategoricalCrossentropy(
+        loss=tf.keras.losses.CategoricalCrossentropy(
             from_logits=False,
             label_smoothing=args.label_smoothing,
         ),
         metrics=[
-            keras.metrics.CategoricalAccuracy(),
+            tf.keras.metrics.CategoricalAccuracy(),
         ],
         loss_weights=None,
         sample_weight_mode=None,
@@ -128,7 +127,7 @@ def build_callbacks(args):
     callbacks = []
     # early stopping
     callbacks.append(
-        keras.callbacks.EarlyStopping(
+        tf.keras.callbacks.EarlyStopping(
             monitor=args.metrics_monitor,  # 检测的变量
             min_delta=0,  # 变化多少才会触发
             patience=args.early_stopping_patience,  # 最多等待几轮
@@ -142,7 +141,7 @@ def build_callbacks(args):
     filepath = os.path.join(args.logs_dir,
                             "weights_{epoch:03d}-{val_loss:.4f}.h5")
     callbacks.append(
-        keras.callbacks.ModelCheckpoint(
+        tf.keras.callbacks.ModelCheckpoint(
             filepath,
             monitor=args.metrics_monitor,  # 判断模型 best 的依据
             verbose=0,  # 显示相关
@@ -170,7 +169,7 @@ def build_callbacks(args):
     # 某参数不再提升后降低学习率
     # 本方法还会用到 optimizers 中定义的 lr，将其作为初始lr
     callbacks.append(
-        keras.callbacks.ReduceLROnPlateau(
+        tf.keras.callbacks.ReduceLROnPlateau(
             monitor=args.metrics_monitor,  # 监控的性能指标
             factor=args.lr_factor,  # 学习率衰减印字
             patience=args.lr_patience,  # 如果多久性能指标不提升就进行学习率衰减
@@ -183,7 +182,7 @@ def build_callbacks(args):
 
     # tensorboard
     callbacks.append(
-        keras.callbacks.TensorBoard(
+        tf.keras.callbacks.TensorBoard(
             log_dir=args.logs_dir,
             histogram_freq=0,
             batch_size=None,

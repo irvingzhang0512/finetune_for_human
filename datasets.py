@@ -1,4 +1,4 @@
-from keras.preprocessing.image import ImageDataGenerator
+from keras_preprocessing.image.image_data_generator import ImageDataGenerator
 
 
 def get_flow_from_directory(

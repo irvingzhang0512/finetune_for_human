@@ -1,7 +1,7 @@
 from functools import partial
 
-import keras
-from keras import layers
+import tensorflow as tf
+from tensorflow.keras import layers
 from keras_applications import mobilenet_v3
 
 
@@ -15,26 +15,22 @@ def build_mobilenet_v3_small(
     num_classes=6,
     input_shape=(224, 224, 3),
     dropout_rate=0.5,
-    last_conv_ch=1024,
     weights=None,
+    minimalistic=False,
 ):
     backbone = mobilenet_v3.MobileNetV3Small(
         include_top=False,
         dropout_rate=0.5,
-        backend=keras.backend,
-        layers=keras.layers,
-        models=keras.models,
-        utils=keras.utils,
+        backend=tf.keras.backend,
+        layers=tf.keras.layers,
+        models=tf.keras.models,
+        utils=tf.keras.utils,
         weights=weights,
+        minimalistic=minimalistic,
     )
-    classifier = keras.models.Sequential([
+    classifier = tf.keras.models.Sequential([
         layers.GlobalAveragePooling2D(),
         layers.Reshape((1, 1, 576)),
-        layers.Conv2D(last_conv_ch,
-                      kernel_size=1,
-                      padding='same',
-                      name='Conv_2'),
-        layers.Activation('relu'),
         layers.Dropout(dropout_rate),
         layers.Conv2D(num_classes,
                       kernel_size=1,
@@ -46,14 +42,14 @@ def build_mobilenet_v3_small(
     inputs = layers.Input(input_shape)
     x = backbone(inputs)
     x = classifier(x)
-    model = keras.Model(inputs, x, name="ar_mobilenet_v3_small")
+    model = tf.keras.Model(inputs, x, name="ar_mobilenet_v3_small")
     model.build(input_shape)
 
     preprocess_fn = partial(
         mobilenet_v3.preprocess_input,
-        backend=keras.backend,
-        layers=keras.layers,
-        models=keras.models,
-        utils=keras.utils,
+        backend=tf.keras.backend,
+        layers=tf.keras.layers,
+        models=tf.keras.models,
+        utils=tf.keras.utils,
     )
     return model, preprocess_fn
