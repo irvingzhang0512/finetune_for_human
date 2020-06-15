@@ -4,7 +4,8 @@ from functools import partial
 
 import numpy as np
 import tensorflow as tf
-from keras_applications import imagenet_utils
+from keras_applications import mobilenet_v3
+from tensorflow.keras import layers
 
 import cv2
 
@@ -18,20 +19,57 @@ tf.keras.backend.set_session(tf.Session(config=config))
 history_length = 5
 prob_threshold = 0.8
 
-total_path = "./logs/logs-mobilenet-v3-small-minimalistic/ar-mobilenet-v3-minimalistic.h5"
+ckpt_path = "/hdd02/zhangyiyang/finetune_for_human/logs/logs-mobilenet-v3-small-minimalistic/weights_012-0.0475.h5"
 in_video_path = "./data/arimgs/videos/input/ar.mp4"
 
 
-def main(args):
-    model = tf.keras.models.load_model(total_path)
+def build_mobilenet_v3_small(
+    num_classes=6,
+    input_shape=(224, 224, 3),
+    dropout_rate=0.5,
+    weights=None,
+    minimalistic=False,
+):
+    backbone = mobilenet_v3.MobileNetV3Small(
+        include_top=False,
+        dropout_rate=0.5,
+        backend=tf.keras.backend,
+        layers=tf.keras.layers,
+        models=tf.keras.models,
+        utils=tf.keras.utils,
+        weights=weights,
+        minimalistic=minimalistic,
+    )
+    classifier = tf.keras.models.Sequential([
+        layers.GlobalAveragePooling2D(),
+        layers.Reshape((1, 1, 576)),
+        layers.Dropout(dropout_rate),
+        layers.Conv2D(num_classes,
+                      kernel_size=1,
+                      padding='same',
+                      name='Logits'),
+        layers.Flatten(),
+        layers.Softmax(name='Predictions/Softmax')
+    ])
+    inputs = layers.Input(input_shape)
+    x = backbone(inputs)
+    x = classifier(x)
+    model = tf.keras.Model(inputs, x, name="ar_mobilenet_v3_small")
+    model.build(input_shape)
+
     preprocess_fn = partial(
-        imagenet_utils.preprocess_input,
-        mode='tf',
+        mobilenet_v3.preprocess_input,
         backend=tf.keras.backend,
         layers=tf.keras.layers,
         models=tf.keras.models,
         utils=tf.keras.utils,
     )
+    return model, preprocess_fn
+
+
+def main(args):
+    model, preprocess_fn = build_mobilenet_v3_small(minimalistic=True)
+    model.load_weights(ckpt_path)
 
     cap = cv2.VideoCapture(in_video_path)
     history = []
