@@ -9,8 +9,18 @@
   + [x] img path dataset
   + [x] simple training scripts
   + [x] webcam demo
+  + [x] keras to tvm
+  + [x] keras to pb
 + TODO
   + [ ] finetune codes
   + [ ] eval codes
-  + [ ] keras to tvm
-  + [ ] keras to pb
+
+
+## 1. easy demo
++ Install:
+  + `tensorflow-gpu==1.15.0`
+  + newest version of keras-applications:
+    + `pip uninstall keras_applications`
+    + `git clone https://github.com/keras-team/keras-applications.git`
+    + `cd keras-applications && python setup.py install`
++ 

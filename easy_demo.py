@@ -8,7 +8,6 @@ from keras_applications import mobilenet_v3
 from tensorflow.keras import layers
 
 import cv2
-
 os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 class_names = ["nothing", "other", "close", "left", "right", "ok"]
 
@@ -28,7 +27,7 @@ def build_mobilenet_v3_small(
     input_shape=(224, 224, 3),
     dropout_rate=0.5,
     weights=None,
-    minimalistic=False,
+    minimalistic=True,
 ):
     backbone = mobilenet_v3.MobileNetV3Small(
         include_top=False,
@@ -68,7 +67,7 @@ def build_mobilenet_v3_small(
 
 
 def main(args):
-    model, preprocess_fn = build_mobilenet_v3_small(minimalistic=True)
+    model, preprocess_fn = build_mobilenet_v3_small()
     model.load_weights(ckpt_path)
 
     cap = cv2.VideoCapture(in_video_path)
